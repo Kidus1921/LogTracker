@@ -18,9 +18,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Upload, X } from "lucide-react";
+import { CalendarIcon, Upload, X, FileIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { createClient } from "../../supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 export interface RepairLog {
   id?: string;
@@ -58,6 +60,137 @@ export default function RepairLogForm({
     }
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; url: string }>>(
+    initialData?.file_urls?.map((url) => ({
+      name: url.split('/').pop() || 'file',
+      url,
+    })) || []
+  );
+  const [isUploading, setIsUploading] = useState(false);
+  const { toast } = useToast();
+  const supabase = createClient();
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    const newFileUrls: Array<{ name: string; url: string }> = [];
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to upload files",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      for (const file of Array.from(files)) {
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+        if (!validTypes.includes(file.type)) {
+          toast({
+            title: "Invalid file type",
+            description: `${file.name} is not a supported file type. Please upload images or PDFs.`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        // Validate file size (10MB max)
+        if (file.size > 10 * 1024 * 1024) {
+          toast({
+            title: "File too large",
+            description: `${file.name} exceeds 10MB limit`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+        const { data, error } = await supabase.storage
+          .from('log-attachments')
+          .upload(fileName, file);
+
+        if (error) {
+          console.error('Upload error:', error);
+          toast({
+            title: "Upload failed",
+            description: `Failed to upload ${file.name}`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('log-attachments')
+          .getPublicUrl(fileName);
+
+        newFileUrls.push({ name: file.name, url: publicUrl });
+      }
+
+      const updatedFiles = [...uploadedFiles, ...newFileUrls];
+      setUploadedFiles(updatedFiles);
+      setFormData({
+        ...formData,
+        file_urls: updatedFiles.map(f => f.url),
+      });
+
+      if (newFileUrls.length > 0) {
+        toast({
+          title: "Success",
+          description: `${newFileUrls.length} file(s) uploaded successfully`,
+        });
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Error",
+        description: "An error occurred during upload",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveFile = async (index: number) => {
+    const fileToRemove = uploadedFiles[index];
+    
+    try {
+      // Extract file path from URL
+      const urlParts = fileToRemove.url.split('/log-attachments/');
+      if (urlParts.length > 1) {
+        const filePath = urlParts[1];
+        await supabase.storage.from('log-attachments').remove([filePath]);
+      }
+
+      const updatedFiles = uploadedFiles.filter((_, i) => i !== index);
+      setUploadedFiles(updatedFiles);
+      setFormData({
+        ...formData,
+        file_urls: updatedFiles.map(f => f.url),
+      });
+
+      toast({
+        title: "File removed",
+        description: "File has been removed successfully",
+      });
+    } catch (error) {
+      console.error('Remove error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove file",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,16 +344,55 @@ export default function RepairLogForm({
       </div>
 
       <div className="space-y-2">
-        <Label>File Attachments</Label>
+        <Label>File Attachments (Images & PDFs)</Label>
         <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-          <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-          <p className="text-sm text-muted-foreground mb-2">
-            Drag and drop files here, or click to browse
-          </p>
-          <p className="text-xs text-muted-foreground">
-            File upload functionality coming soon
-          </p>
+          <input
+            type="file"
+            id="file-upload"
+            className="hidden"
+            multiple
+            accept="image/*,.pdf"
+            onChange={handleFileUpload}
+            disabled={isUploading}
+          />
+          <label htmlFor="file-upload" className="cursor-pointer">
+            <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground mb-2">
+              {isUploading ? "Uploading..." : "Click to upload files"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Supports: Images (JPG, PNG, GIF, WebP) and PDF files (Max 10MB each)
+            </p>
+          </label>
         </div>
+
+        {uploadedFiles.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <Label>Uploaded Files ({uploadedFiles.length})</Label>
+            <div className="space-y-2">
+              {uploadedFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <FileIcon className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-sm truncate">{file.name}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveFile(index)}
+                    className="flex-shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3 justify-end pt-4">
@@ -229,7 +401,7 @@ export default function RepairLogForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || isUploading}>
           {isSubmitting ? "Saving..." : initialData ? "Update Log" : "Add Log"}
         </Button>
       </div>

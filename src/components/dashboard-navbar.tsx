@@ -14,6 +14,7 @@ import { UserCircle, Home, FileText, LogOut } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ThemeSwitcher } from './theme-switcher'
+import Image from 'next/image'
 
 export default function DashboardNavbar() {
   const router = useRouter()
@@ -40,8 +41,9 @@ export default function DashboardNavbar() {
     <nav className="w-full border-b bg-background py-4">
       <div className="container mx-auto px-4 flex justify-between items-center">
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" prefetch className="text-xl font-bold">
-            Log Tracker
+          <Link href="/dashboard" prefetch className="flex items-center gap-2">
+            <Image src="/logo.png" alt="Log Tracker" width={40} height={40} />
+            <span className="text-xl font-bold">Log Tracker</span>
           </Link>
           <div className="hidden md:flex gap-4">
             <Link href="/dashboard">
