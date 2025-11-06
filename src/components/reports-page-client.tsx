@@ -32,6 +32,8 @@ import { FileText, Search, Table as TableIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { RepairLog } from "@/components/repair-log-form";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const statusColors = {
   pending:
@@ -198,7 +200,25 @@ export default function ReportsPageClient({ userId }: ReportsPageClientProps) {
         description: `Downloaded ${filteredLogs.length} repair records`,
       });
     } else {
-      toast({ title: "PDF Export", description: "Coming soon" });
+      const doc = new jsPDF();
+      doc.text("Repair Logs", 14, 16);
+      // @ts-ignore
+      autoTable(doc, {
+        startY: 22,
+        head: [["Item Name", "Device", "Date", "Location", "Cost", "Status"]],
+        body: filteredLogs.map((l) => [
+          l.item_name,
+          l.device_type || "N/A",
+          format(new Date(l.repair_date), "yyyy-MM-dd"),
+          l.repair_location,
+          `$${l.repair_cost.toFixed(2)}`,
+          l.status,
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+      doc.save(`repair-logs-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+      toast({ title: "Success", description: "PDF downloaded" });
     }
   };
 
@@ -297,7 +317,24 @@ export default function ReportsPageClient({ userId }: ReportsPageClientProps) {
         description: `Downloaded ${filteredPurchases.length} purchase records`,
       });
     } else {
-      toast({ title: "PDF Export", description: "Coming soon" });
+      const doc = new jsPDF();
+      doc.text("Purchase Logs", 14, 16);
+      // @ts-ignore
+      autoTable(doc, {
+        startY: 22,
+        head: [["Item Name", "Date", "Location", "Cost", "Warranty"]],
+        body: filteredPurchases.map((l) => [
+          l.item_name,
+          format(new Date(l.purchase_date), "yyyy-MM-dd"),
+          l.purchase_location,
+          `$${l.purchase_cost.toFixed(2)}`,
+          l.warranty_info || "N/A",
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+      doc.save(`purchase-logs-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+      toast({ title: "Success", description: "PDF downloaded" });
     }
   };
 

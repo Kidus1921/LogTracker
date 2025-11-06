@@ -15,6 +15,8 @@ import PurchaseLogList from "@/components/purchase-log-list";
 import ReportGenerator from "@/components/report-generator";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function LogTrackerClient({ userId }: { userId: string }) {
   const [activeTab, setActiveTab] = useState("repair");
@@ -317,10 +319,36 @@ export default function LogTrackerClient({ userId }: { userId: string }) {
         a.download = `${type}-logs-${format(new Date(), "yyyy-MM-dd")}.csv`;
         a.click();
       } else {
-        toast({
-          title: "PDF Export",
-          description: "PDF export functionality coming soon",
+        const doc = new jsPDF();
+        const title = type === "repair" ? "Repair Logs" : "Purchase Logs";
+        doc.text(title, 14, 16);
+        // @ts-ignore
+        autoTable(doc, {
+          startY: 22,
+          head:
+            type === "repair"
+              ? [["Item Name", "Date", "Location", "Cost", "Status"]]
+              : [["Item Name", "Date", "Location", "Cost", "Warranty"]],
+          body:
+            type === "repair"
+              ? (filteredLogs as RepairLog[]).map((l) => [
+                  l.item_name,
+                  format(new Date(l.repair_date), "yyyy-MM-dd"),
+                  l.repair_location,
+                  `$${l.repair_cost.toFixed(2)}`,
+                  l.status,
+                ])
+              : (filteredLogs as PurchaseLog[]).map((l) => [
+                  l.item_name,
+                  format(new Date(l.purchase_date), "yyyy-MM-dd"),
+                  l.purchase_location,
+                  `$${l.purchase_cost.toFixed(2)}`,
+                  l.warranty_info || "N/A",
+                ]),
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [59, 130, 246] },
         });
+        doc.save(`${type}-logs-${format(new Date(), "yyyy-MM-dd")}.pdf`);
       }
 
       toast({

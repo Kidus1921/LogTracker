@@ -22,7 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Edit, Search, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Edit, Search, Trash2, ShoppingCart, Eye, Paperclip } from "lucide-react";
 import { format } from "date-fns";
 
 interface PurchaseLogListProps {
@@ -39,6 +40,7 @@ export default function PurchaseLogList({
   const [searchTerm, setSearchTerm] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [previewLog, setPreviewLog] = useState<PurchaseLog | null>(null);
 
   const filteredLogs = logs.filter(
     (log) =>
@@ -92,7 +94,7 @@ export default function PurchaseLogList({
             </TableHeader>
             <TableBody>
               {filteredLogs.map((log) => (
-                <TableRow key={log.id}>
+                <TableRow key={log.id} className="hover:bg-muted/40">
                   <TableCell className="font-medium">{log.item_name}</TableCell>
                   <TableCell>
                     {format(new Date(log.purchase_date), "MMM dd, yyyy")}
@@ -104,6 +106,14 @@ export default function PurchaseLogList({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setPreviewLog(log)}
+                        aria-label="View details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -127,6 +137,82 @@ export default function PurchaseLogList({
         </div>
       )}
 
+      {/* Preview dialog */}
+      <Dialog open={!!previewLog} onOpenChange={() => setPreviewLog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" /> Purchase Details
+            </DialogTitle>
+            <DialogDescription>Full information including attachments</DialogDescription>
+          </DialogHeader>
+          {previewLog && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Item Name</p>
+                  <p className="font-medium">{previewLog.item_name}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Purchase Date</p>
+                  <p className="font-medium">{format(new Date(previewLog.purchase_date), "PPP")}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Location</p>
+                  <p className="font-medium">{previewLog.purchase_location}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Cost</p>
+                  <p className="font-medium">${previewLog.purchase_cost.toFixed(2)}</p>
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <p className="text-sm text-muted-foreground">Warranty Info</p>
+                  <p className="text-sm">{previewLog.warranty_info || "N/A"}</p>
+                </div>
+              </div>
+
+              {previewLog.notes && (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Notes</p>
+                  <p className="text-sm">{previewLog.notes}</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Attachments</p>
+                {previewLog.file_urls && previewLog.file_urls.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {previewLog.file_urls.map((url, i) => {
+                      const isImage = /(jpg|jpeg|png|gif|webp)$/i.test(url.split("?")[0]);
+                      const name = url.split("/").pop() || `file-${i+1}`;
+                      return (
+                        <div key={i} className="border rounded-md p-2 flex items-center gap-3">
+                          {isImage ? (
+                            <img src={url} alt={name} className="h-16 w-16 object-cover rounded" />
+                          ) : (
+                            <Paperclip className="h-6 w-6 text-muted-foreground" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate">{name}</p>
+                            <div className="flex gap-2 mt-1">
+                              <a href={url} target="_blank" rel="noreferrer" className="text-xs text-primary">Open</a>
+                              <a href={url} download className="text-xs text-primary">Download</a>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm">No attachments</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete dialog */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
